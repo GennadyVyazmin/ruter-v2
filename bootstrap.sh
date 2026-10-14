@@ -6,10 +6,10 @@ set -Eeuo pipefail
 
 REPO=https://github.com/GennadyVyazmin/ruter-v2.git
 TARGET_USER=
-LAN_IF=ens18
+LAN_IF=
 
 usage() {
-  echo 'Usage: bash bootstrap.sh --user LOGIN [--interface LAN_IF]' >&2
+  echo 'Usage: bash bootstrap.sh [--user LOGIN] [--interface LAN_IF]' >&2
   exit 2
 }
 
@@ -22,9 +22,17 @@ while (($#)); do
 done
 
 [[ $EUID -eq 0 ]] || { echo 'Запустите загрузчик от root (su или sudo).' >&2; exit 1; }
+if [[ -z $TARGET_USER ]]; then
+  TARGET_USER=${SUDO_USER:-}
+  if [[ -z $TARGET_USER || $TARGET_USER == root ]]; then
+    TARGET_USER=$(logname 2>/dev/null || true)
+  fi
+  if [[ -z $TARGET_USER || $TARGET_USER == root ]]; then
+    read -r -p 'Имя пользователя для Ruter v2: ' TARGET_USER
+  fi
+fi
 [[ -n $TARGET_USER && $TARGET_USER != root ]] || usage
 [[ $TARGET_USER =~ ^[a-z_][a-z0-9_-]*[$]?$ ]] || { echo 'Некорректное имя пользователя.' >&2; exit 1; }
-[[ $LAN_IF =~ ^[a-zA-Z0-9_.:-]+$ ]] || { echo 'Некорректный интерфейс.' >&2; exit 1; }
 getent passwd "$TARGET_USER" >/dev/null || { echo 'Пользователь не найден.' >&2; exit 1; }
 USER_HOME=$(getent passwd "$TARGET_USER" | cut -d: -f6)
 [[ -d $USER_HOME && $USER_HOME != / ]] || { echo 'Некорректная домашняя папка.' >&2; exit 1; }
@@ -48,6 +56,19 @@ for cmd in sudo git curl python3 ip ss; do
   command -v "$cmd" >/dev/null || { echo "Не установлена команда $cmd" >&2; exit 1; }
 done
 [[ -s /etc/ssl/certs/ca-certificates.crt ]] || { echo 'Сертификаты CA не установлены.' >&2; exit 1; }
+
+if [[ -z $LAN_IF ]]; then
+  mapfile -t DEFAULT_IFACES < <(ip -4 route show default | awk '{for (i=1; i<NF; i++) if ($i=="dev") print $(i+1)}' | sort -u)
+  if ((${#DEFAULT_IFACES[@]} == 1)); then
+    LAN_IF=${DEFAULT_IFACES[0]}
+  else
+    printf 'Не удалось однозначно выбрать LAN-интерфейс. Кандидаты: %s\n' "${DEFAULT_IFACES[*]:-нет}"
+    read -r -p 'Имя LAN-интерфейса: ' LAN_IF
+  fi
+fi
+[[ $LAN_IF =~ ^[a-zA-Z0-9_.:-]+$ ]] || { echo 'Некорректный интерфейс.' >&2; exit 1; }
+ip link show dev "$LAN_IF" >/dev/null || { echo "Интерфейс $LAN_IF не найден." >&2; exit 1; }
+echo "Установка для пользователя $TARGET_USER, интерфейс $LAN_IF."
 
 # The named user is explicitly chosen by the operator for future sudo use.
 if ! id -nG "$TARGET_USER" | tr ' ' '\n' | grep -qx sudo; then
