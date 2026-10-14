@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+if ((EUID == 0)); then
+  exec /opt/ruter-v2/ruter-v2 "$@"
+fi
+exec sudo /opt/ruter-v2/ruter-v2 "$@"

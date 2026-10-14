@@ -12,6 +12,7 @@ import ipaddress
 import json
 import os
 from pathlib import Path
+import platform
 import re
 import secrets
 import shutil
@@ -61,13 +62,17 @@ def preflight() -> None:
         raise RuntimeError("Существующий sing-box.service работает; установка второго шлюза на этой машине запрещена")
     if Path("/var/lib/ruter-v2/route.state").exists():
         raise RuntimeError("Правила Ruter v2 уже активны. Сначала остановите шлюз")
-    launcher = Path("/usr/local/bin/ruter-v2")
-    if launcher.exists() or launcher.is_symlink():
-        raise RuntimeError("/usr/local/bin/ruter-v2 уже занят; установка не будет его перезаписывать")
-    if "ID=debian" not in Path("/etc/os-release").read_text():
-        print("Предупреждение: платформа отличается от проверенного Debian")
+    for name in ("ruter", "ruter-v2"):
+        launcher = Path("/usr/local/bin") / name
+        if launcher.exists() or launcher.is_symlink():
+            raise RuntimeError(f"{launcher} уже занят; установка не будет его перезаписывать")
+    distro = platform.freedesktop_os_release().get("ID")
+    if distro not in ("debian", "ubuntu"):
+        raise RuntimeError("Поддерживаются Debian и Ubuntu с systemd")
     if os.uname().machine != "x86_64":
         raise RuntimeError("Закреплённое ядро рассчитано на x86_64")
+    if not Path("/run/systemd/system").is_dir():
+        raise RuntimeError("Не найдена работающая systemd; установка служб невозможна")
     rules = command_output("ip", "-4", "rule", "show")
     # `ip route show table 220` exits with code 2 when the table does not yet
     # exist. Inspect all tables instead: a fresh installation must accept that.
@@ -189,7 +194,7 @@ def install_core(local_binary: str | None) -> Path:
             shutil.copy2(license_file, OPT / "licenses/sing-box-lx-LICENSE")
     else:
         import tarfile
-        with tempfile.TemporaryDirectory(prefix="ruter-v2-core-") as temp:
+        with tempfile.TemporaryDirectory(prefix=".core-download-", dir=VAR) as temp:
             archive = Path(temp) / "core.tar.gz"
             with urllib.request.urlopen(CORE_URL, timeout=60) as response, archive.open("wb") as out:
                 shutil.copyfileobj(response, out)
@@ -241,7 +246,7 @@ def service_active(name: str) -> bool:
 def install(interface: str | None, local_binary: str | None) -> None:
     require_root()
     preflight()
-    required = ("git", "curl", "ip", "ss", "python3")
+    required = ("git", "curl", "ip", "ss", "python3", "sysctl", "systemctl")
     missing = [name for name in required if shutil.which(name) is None]
     if missing or not Path("/etc/ssl/certs/ca-certificates.crt").is_file():
         raise RuntimeError("Не готовы зависимости Debian. Сначала запустите bootstrap.sh")
@@ -269,6 +274,8 @@ def install(interface: str | None, local_binary: str | None) -> None:
         shutil.copy2(ROOT / "ruter_v2" / filename, package / filename)
     shutil.copy2(ROOT / "ruter-v2", OPT / "ruter-v2")
     (OPT / "ruter-v2").chmod(0o755)
+    shutil.copy2(ROOT / "ruter", OPT / "ruter")
+    (OPT / "ruter").chmod(0o755)
     atomic_write(ETC / "network.env", f"LAN_IF={interface}\nLAN_IP={lan_ip}\nLAN_CIDR={lan_cidr}\n")
     atomic_write(ETC / "source.txt", source + "\n")
     atomic_write(ETC / "api-secret.txt", secret + "\n")
@@ -276,12 +283,13 @@ def install(interface: str | None, local_binary: str | None) -> None:
     for name in ("ruter-v2-core.service", "ruter-v2-route.service"):
         shutil.copy2(ROOT / "systemd" / name, Path("/etc/systemd/system") / name)
     Path("/usr/local/bin/ruter-v2").symlink_to(OPT / "ruter-v2")
+    Path("/usr/local/bin/ruter").symlink_to(OPT / "ruter")
     run("systemctl", "daemon-reload")
     print(f"Установлено {count} серверов; службы не запущены.")
     for warning in warnings:
         print("Предупреждение:", warning)
     print(f"MetaCubeXD после запуска: http://{lan_ip}:9190/ui/ (ключ в {ETC / 'api-secret.txt'})")
-    print("Для запуска выберите пункт меню «Запустить шлюз».")
+    print("Для главного меню введите ruter; для запуска выберите пункт «Запустить шлюз».")
 
 
 def update_subscription() -> None:
@@ -398,9 +406,10 @@ def uninstall() -> None:
         run("systemctl", "disable", name, check=False)
         (Path("/etc/systemd/system") / name).unlink(missing_ok=True)
     run("systemctl", "daemon-reload")
-    launcher = Path("/usr/local/bin/ruter-v2")
-    if launcher.is_symlink() and launcher.resolve(strict=False) == OPT / "ruter-v2":
-        launcher.unlink()
+    for name in ("ruter", "ruter-v2"):
+        launcher = Path("/usr/local/bin") / name
+        if launcher.is_symlink() and launcher.resolve(strict=False) == OPT / name:
+            launcher.unlink()
     for path in (ETC, OPT, VAR):
         if path.exists():
             shutil.rmtree(path)

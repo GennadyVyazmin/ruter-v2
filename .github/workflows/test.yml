@@ -16,4 +16,22 @@ jobs:
         run: |
           PYTHONPATH=. python3 -m unittest discover -s tests -v
           python3 -m compileall -q ruter_v2
-          bash -n bootstrap.sh ruter-v2 ruter_v2/route.sh
+          bash -n bootstrap.sh ruter ruter-v2 ruter_v2/route.sh
+  clean-dependencies:
+    strategy:
+      matrix:
+        image: [debian:trixie, ubuntu:24.04, ubuntu:26.04]
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    steps:
+      - name: Install clean-system prerequisites
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y sudo git curl wget ca-certificates python3 iproute2 procps passwd
+          for cmd in sudo git curl wget python3 ip ss sysctl systemctl usermod; do command -v "$cmd"; done
+      - uses: actions/checkout@v4
+      - name: Check source on clean distribution image
+        run: |
+          PYTHONPATH=. python3 -m unittest discover -s tests -v
+          python3 -m compileall -q ruter_v2
+          bash -n bootstrap.sh ruter ruter-v2 ruter_v2/route.sh

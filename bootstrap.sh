@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Stage 1: prepare a minimal Debian. Stage 2: run the Ruter v2 installer.
-# This script must be downloaded before use (wget is available on Debian Test).
+# Stage 1: prepare Debian or Ubuntu. Stage 2: run the Ruter v2 installer.
+# A downloader is needed only to fetch this script initially.
 
 REPO=https://github.com/GennadyVyazmin/ruter-v2.git
 TARGET_USER=
@@ -37,7 +37,14 @@ getent passwd "$TARGET_USER" >/dev/null || { echo 'Пользователь не
 USER_HOME=$(getent passwd "$TARGET_USER" | cut -d: -f6)
 [[ -d $USER_HOME && $USER_HOME != / ]] || { echo 'Некорректная домашняя папка.' >&2; exit 1; }
 CHECKOUT="$USER_HOME/ruter-v2"
-command -v apt-get >/dev/null || { echo 'Нужен Debian/apt-get.' >&2; exit 1; }
+command -v apt-get >/dev/null || { echo 'Нужна Debian/Ubuntu с apt-get.' >&2; exit 1; }
+[[ -r /etc/os-release ]] || { echo 'Не удалось определить Linux-дистрибутив.' >&2; exit 1; }
+# shellcheck disable=SC1091
+DISTRO_ID=$( . /etc/os-release; printf '%s' "$ID" )
+[[ $DISTRO_ID == debian || $DISTRO_ID == ubuntu ]] || {
+  echo 'Поддерживаются только Debian и Ubuntu.' >&2; exit 1;
+}
+[[ -d /run/systemd/system ]] || { echo 'Нужна система с работающей systemd.' >&2; exit 1; }
 if command -v systemctl >/dev/null && systemctl is-active --quiet sing-box.service; then
   echo 'На этой машине уже работает sing-box.service. Production/старый шлюз не тронут.' >&2
   exit 1
@@ -47,11 +54,11 @@ if command -v systemctl >/dev/null && systemctl is-active --quiet ruter-xhttp-la
   exit 1
 fi
 
-echo '=== ЭТАП 1/2: подготовка Debian ==='
+echo '=== ЭТАП 1/2: подготовка Debian/Ubuntu ==='
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y sudo git curl ca-certificates python3 iproute2
-for cmd in sudo git curl python3 ip ss; do
+apt-get install -y sudo git curl wget ca-certificates python3 iproute2 procps passwd
+for cmd in sudo git curl wget python3 ip ss sysctl systemctl usermod; do
   command -v "$cmd" >/dev/null || { echo "Не установлена команда $cmd" >&2; exit 1; }
 done
 [[ -s /etc/ssl/certs/ca-certificates.crt ]] || { echo 'Сертификаты CA не установлены.' >&2; exit 1; }
@@ -93,4 +100,4 @@ cd "$CHECKOUT"
 ./ruter-v2 --interface "$LAN_IF" install
 
 echo 'Ruter v2 установлен, но ещё не запущен.'
-echo 'После проверки выберите в меню пункт 3 или выполните: sudo ruter-v2 start'
+echo 'Главное меню: ruter. После проверки выберите пункт 3 для запуска шлюза.'
