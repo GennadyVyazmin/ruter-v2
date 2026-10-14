@@ -1,0 +1,15 @@
+[Unit]
+Description=Ruter v2 LAN routing (private table 220)
+Requires=ruter-v2-core.service
+BindsTo=ruter-v2-core.service
+After=ruter-v2-core.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/ruter-v2/route.sh start
+ExecStop=/opt/ruter-v2/route.sh stop
+TimeoutStartSec=25
+
+[Install]
+WantedBy=multi-user.target

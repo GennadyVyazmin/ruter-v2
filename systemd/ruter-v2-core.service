@@ -1,0 +1,20 @@
+[Unit]
+Description=Ruter v2 isolated sing-box-lx core
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/opt/ruter-v2/bin/sing-box run -c /etc/ruter-v2/config.json
+WorkingDirectory=/var/lib/ruter-v2
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/ruter-v2
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE
+
+[Install]
+WantedBy=multi-user.target

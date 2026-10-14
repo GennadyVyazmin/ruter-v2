@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+exec python3 -m ruter_v2.manager "$@"
