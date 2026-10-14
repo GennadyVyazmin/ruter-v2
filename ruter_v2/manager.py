@@ -251,7 +251,7 @@ def install(interface: str | None, local_binary: str | None) -> None:
     if missing or not Path("/etc/ssl/certs/ca-certificates.crt").is_file():
         raise RuntimeError("Не готовы зависимости Debian. Сначала запустите bootstrap.sh")
     if (ETC / "config.json").exists():
-        raise RuntimeError("Ruter v2 уже установлен. Для изменения подписки выберите пункт 2")
+        raise RuntimeError("Ruter v2 уже установлен. Для новой ссылки выберите пункт 3")
     interface = select_lan_interface(interface)
     lan_ip, lan_cidr = network_info(interface)
     confirm_network(interface, lan_ip, lan_cidr)
@@ -323,7 +323,7 @@ def change_source() -> None:
     require_root()
     if not (ETC / "source.txt").exists():
         raise RuntimeError("Сначала установите Ruter v2")
-    new_source = input("Новая HTTPS-подписка или VLESS-ссылка: ").strip()
+    new_source = input("Вставьте новую HTTPS-ссылку подписки или VLESS-ссылку: ").strip()
     if not new_source:
         raise RuntimeError("Источник пуст")
     lan_ip = re.search(r"^LAN_IP=(.+)$", (ETC / "network.env").read_text(), re.M).group(1)
@@ -418,13 +418,13 @@ def uninstall() -> None:
 
 MENU = [
     ("1", "Установить Ruter v2", "install"),
-    ("2", "Обновить подписку из сохранённого источника", "update"),
-    ("3", "Запустить шлюз", "start"),
-    ("4", "Остановить шлюз", "stop"),
-    ("5", "Состояние", "status"),
-    ("6", "Диагностика", "diagnostics"),
-    ("7", "Включить / выключить автозапуск", "autostart"),
-    ("8", "Изменить источник подписки", "change-source"),
+    ("2", "Обновить подписку из текущего источника", "update"),
+    ("3", "Вставить новую ссылку подписки", "change-source"),
+    ("4", "Запустить шлюз", "start"),
+    ("5", "Остановить шлюз", "stop"),
+    ("6", "Состояние", "status"),
+    ("7", "Диагностика", "diagnostics"),
+    ("8", "Включить / выключить автозапуск", "autostart"),
     ("9", "Удалить Ruter v2", "uninstall"),
 ]
 

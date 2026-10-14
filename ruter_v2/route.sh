@@ -32,8 +32,8 @@ start() {
   ip -4 route show default | grep -Fq " dev $LAN_IF "
   original_forward=$(< /proc/sys/net/ipv4/ip_forward)
   rollback() {
-    ip -4 rule del pref "$LAN_PREF" 2>/dev/null || true
-    ip -4 rule del pref "$SELF_PREF" 2>/dev/null || true
+    ip -4 rule del pref "$LAN_PREF" from "$LAN_CIDR" lookup "$TABLE" 2>/dev/null || true
+    ip -4 rule del pref "$SELF_PREF" from "$LAN_IP/32" lookup main 2>/dev/null || true
     ip -4 route flush table "$TABLE" 2>/dev/null || true
     sysctl -qw "net.ipv4.ip_forward=$original_forward" || true
   }
@@ -51,13 +51,10 @@ start() {
 stop() {
   [[ -f $STATE ]] || return 0
   original_forward=$(< "$STATE")
-  # Remove only the rules reserved by this instance, and only if they match.
-  if ip -4 rule show | grep -Fq "$LAN_PREF: from $LAN_CIDR lookup $TABLE"; then
-    ip -4 rule del pref "$LAN_PREF" from "$LAN_CIDR" lookup "$TABLE"
-  fi
-  if ip -4 rule show | grep -Fq "$SELF_PREF: from $LAN_IP lookup main"; then
-    ip -4 rule del pref "$SELF_PREF" from "$LAN_IP/32" lookup main
-  fi
+  # Match the full selector: `ip rule show` may use tabs after the priority.
+  # A missing owned rule is harmless, but an unrelated rule must stay intact.
+  ip -4 rule del pref "$LAN_PREF" from "$LAN_CIDR" lookup "$TABLE" 2>/dev/null || true
+  ip -4 rule del pref "$SELF_PREF" from "$LAN_IP/32" lookup main 2>/dev/null || true
   ip -4 route flush table "$TABLE"
   if [[ $original_forward == 0 && $(< /proc/sys/net/ipv4/ip_forward) == 1 ]]; then
     sysctl -qw net.ipv4.ip_forward=0

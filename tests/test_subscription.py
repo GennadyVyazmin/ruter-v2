@@ -30,6 +30,11 @@ class SubscriptionTests(unittest.TestCase):
         self.assertEqual(len(servers), 1)
         self.assertEqual(len(warnings), 1)
 
+    def test_pqv_does_not_spam_warnings(self):
+        servers, warnings = parse_subscription(XHTTP.replace("&type=xhttp", "&pqv=test-value&type=xhttp"))
+        self.assertEqual(len(servers), 1)
+        self.assertEqual(warnings, [])
+
     def test_json_rejected_explicitly(self):
         with self.assertRaisesRegex(SubscriptionError, "JSON"):
             parse_subscription('{"outbounds": []}')
@@ -49,7 +54,8 @@ class SubscriptionTests(unittest.TestCase):
         config = build_config(servers, "192.168.88.40", "a-secret")
         self.assertEqual(config["route"]["final"], "select")
         self.assertEqual(config["experimental"]["clash_api"]["external_controller"], "192.168.88.40:9190")
-        self.assertEqual([item[2] for item in MENU[:2]], ["install", "update"])
+        self.assertEqual([item[2] for item in MENU[:3]], ["install", "update", "change-source"])
+        self.assertEqual([item[0] for item in MENU], [str(number) for number in range(1, 10)])
         self.assertEqual(MENU[-1][2], "uninstall")
 
 

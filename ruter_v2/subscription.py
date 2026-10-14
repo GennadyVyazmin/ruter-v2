@@ -132,8 +132,6 @@ def parse_subscription(body: str) -> tuple[list[dict], list[str]]:
             outbound["tag"] = tag
         used.add(tag)
         outbounds.append(outbound)
-        if "pqv=" in link:
-            warnings.append(f"{tag}: параметр pqv не используется; совместимость ML-DSA отдельно не проверена")
     if not outbounds:
         raise SubscriptionError("Нет поддерживаемых серверов: " + "; ".join(warnings))
     return outbounds, warnings
