@@ -32,6 +32,7 @@ CORE_ARCHIVE_SHA256 = "9df2039fe290e56634f5f899f2337f6ce8b5cee22023c3a75e79c8e63
 CORE_BINARY_SHA256 = "2ee0653b7a6c36f3e08be72e7eb902d2713b8e893b87db5e3e8e538ed04526ba"
 CORE_URL = ("https://github.com/Leadaxe/sing-box-lx/releases/download/"
             "v1.14.3-lx.20/sing-box-1.14.3-lx.20-linux-amd64.tar.gz")
+UI_COMMIT = "28a9589f6239bbafc24e87bbf5e5b4997fe42e59"
 
 
 def run(*args: str, check: bool = True, capture: bool = False) -> subprocess.CompletedProcess:
@@ -195,6 +196,11 @@ def install_ui() -> None:
     try:
         run("git", "clone", "--depth", "1", "--branch", "gh-pages",
             "https://github.com/MetaCubeX/metacubexd.git", str(temp))
+        if command_output("git", "-C", str(temp), "rev-parse", "HEAD").strip() != UI_COMMIT:
+            run("git", "-C", str(temp), "fetch", "--depth", "1", "origin", UI_COMMIT)
+            run("git", "-C", str(temp), "checkout", "--detach", UI_COMMIT)
+        if command_output("git", "-C", str(temp), "rev-parse", "HEAD").strip() != UI_COMMIT:
+            raise RuntimeError("Версия MetaCubeXD не совпадает с закреплённой")
         temp.rename(ui)
     finally:
         if temp.exists():
@@ -300,6 +306,8 @@ def start() -> None:
     require_root()
     if active_lab():
         raise RuntimeError("Временный тестовый шлюз ещё работает")
+    if service_active("sing-box.service"):
+        raise RuntimeError("Другой sing-box.service работает; второй шлюз не запущен")
     if not (ETC / "config.json").exists():
         raise RuntimeError("Сначала установите Ruter v2")
     run("systemctl", "start", "ruter-v2-core.service")
