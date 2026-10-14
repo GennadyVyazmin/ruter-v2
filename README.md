@@ -20,11 +20,13 @@
    пользователя `pi` и интерфейса `ens18` это одна строка:
 
    ```bash
-   wget -qO /tmp/ruter-v2-bootstrap.sh https://raw.githubusercontent.com/GennadyVyazmin/ruter-v2/main/bootstrap.sh && su -c 'bash /tmp/ruter-v2-bootstrap.sh --user pi --interface ens18'
+   wget -qO /tmp/ruter-v2-bootstrap.sh https://raw.githubusercontent.com/GennadyVyazmin/ruter-v2/main/bootstrap.sh && echo 'be8a285b7860fe1c1326c37669a6acdd8adeee6a1a01f73d7566947476e9219e  /tmp/ruter-v2-bootstrap.sh' | sha256sum -c - && su -c 'bash /tmp/ruter-v2-bootstrap.sh --user pi --interface ens18'
    ```
 
    Загрузчик сначала ставит `sudo`, `git`, `curl`, сертификаты, Python и сетевые
    утилиты. Затем он скачивает исходники и запускает основную установку.
+   Сверка SHA-256 не даст запустить изменившийся загрузчик без обновления
+   этой инструкции.
    Если `sudo` уже работает, вместо `su -c 'bash ...'` можно выполнить
    `sudo bash /tmp/ruter-v2-bootstrap.sh --user pi --interface ens18`.
    Если даже `wget` отсутствует, скопируйте `bootstrap.sh` на машину через
