@@ -155,6 +155,10 @@ def install_core(local_binary: str | None) -> Path:
         if sha256(source) != CORE_BINARY_SHA256:
             raise RuntimeError("Хеш выбранного ядра не совпадает с проверенным sing-box-lx")
         shutil.copy2(source, destination)
+        license_file = source.parent / "LICENSE"
+        if license_file.is_file():
+            (OPT / "licenses").mkdir(exist_ok=True)
+            shutil.copy2(license_file, OPT / "licenses/sing-box-lx-LICENSE")
     else:
         import tarfile
         with tempfile.TemporaryDirectory(prefix="ruter-v2-core-") as temp:
@@ -169,6 +173,11 @@ def install_core(local_binary: str | None) -> Path:
                     raise RuntimeError("В архиве ядра не найден ожидаемый исполняемый файл")
                 with tar.extractfile(members[0]) as source, destination.open("wb") as out:
                     shutil.copyfileobj(source, out)
+                licenses = [m for m in tar.getmembers() if m.name.endswith("/LICENSE") and m.isfile()]
+                if len(licenses) == 1:
+                    (OPT / "licenses").mkdir(exist_ok=True)
+                    with tar.extractfile(licenses[0]) as source, (OPT / "licenses/sing-box-lx-LICENSE").open("wb") as out:
+                        shutil.copyfileobj(source, out)
     if sha256(destination) != CORE_BINARY_SHA256:
         destination.unlink(missing_ok=True)
         raise RuntimeError("Хеш ядра после установки не совпадает")
