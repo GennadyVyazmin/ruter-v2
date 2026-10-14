@@ -11,6 +11,7 @@ TUN=ruter-v2-tun
 [[ $EUID -eq 0 ]] || { echo 'Run as root' >&2; exit 1; }
 [[ -f $ENV_FILE ]] || { echo 'Missing network configuration' >&2; exit 1; }
 # network.env is written by Ruter v2, root-owned and mode 0600.
+# shellcheck disable=SC1090
 source "$ENV_FILE"
 
 owned_rule() { ip -4 rule show | grep -Eq "^$1:"; }

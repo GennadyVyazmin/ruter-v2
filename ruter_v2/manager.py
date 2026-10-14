@@ -214,6 +214,10 @@ def service_active(name: str) -> bool:
 def install(interface: str, local_binary: str | None) -> None:
     require_root()
     preflight()
+    required = ("git", "curl", "ip", "ss", "python3")
+    missing = [name for name in required if shutil.which(name) is None]
+    if missing or not Path("/etc/ssl/certs/ca-certificates.crt").is_file():
+        raise RuntimeError("Не готовы зависимости Debian. Сначала запустите bootstrap.sh")
     if (ETC / "config.json").exists():
         raise RuntimeError("Ruter v2 уже установлен. Для изменения подписки выберите пункт 2")
     lan_ip, lan_cidr = network_info(interface)
@@ -223,9 +227,7 @@ def install(interface: str, local_binary: str | None) -> None:
     source = input("HTTPS-ссылка подписки или одна VLESS-ссылка: ").strip()
     if not source:
         raise RuntimeError("Источник подписки не указан")
-    print("Устанавливаются только зависимости и отдельные службы Ruter v2; маршруты пока не включаются.")
-    run("apt-get", "update")
-    run("apt-get", "install", "-y", "ca-certificates", "git", "iproute2", "python3")
+    print("Зависимости готовы. Устанавливаются только отдельные файлы и службы Ruter v2; маршруты пока не включаются.")
     ETC.mkdir(mode=0o700, parents=True, exist_ok=True)
     VAR.mkdir(mode=0o700, parents=True, exist_ok=True)
     OPT.mkdir(mode=0o755, parents=True, exist_ok=True)
