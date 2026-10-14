@@ -97,6 +97,30 @@ def network_info(interface: str) -> tuple[str, str]:
     return lan_ip, lan_cidr
 
 
+def select_lan_interface(explicit: str | None) -> str:
+    if explicit:
+        return explicit
+    routes = json.loads(command_output("ip", "-j", "-4", "route", "show", "default"))
+    candidates = list(dict.fromkeys(route["dev"] for route in routes if route.get("dev")))
+    if not candidates:
+        raise RuntimeError("Не найден сетевой интерфейс с IPv4-шлюзом")
+    if len(candidates) == 1:
+        return candidates[0]
+    print("Найдено несколько подключений с IPv4-шлюзом:")
+    for number, name in enumerate(candidates, 1):
+        print(f"  {number}. {name}")
+    choice = input("Выберите номер сетевого подключения: ").strip()
+    if not choice.isdigit() or not 1 <= int(choice) <= len(candidates):
+        raise RuntimeError("Установка отменена: сетевое подключение не выбрано")
+    return candidates[int(choice) - 1]
+
+
+def confirm_network(interface: str, lan_ip: str, lan_cidr: str) -> None:
+    print(f"\nНайдены сетевые настройки:\n  Подключение: {interface}\n  IP-адрес: {lan_ip}\n  Подсеть: {lan_cidr}")
+    if input("Использовать эти настройки для Ruter v2? [д/Н]: ").strip().lower() not in ("д", "да", "y", "yes"):
+        raise RuntimeError("Установка отменена; сетевые настройки не изменены")
+
+
 def atomic_write(path: Path, content: str, mode: int = 0o600) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temp_name = tempfile.mkstemp(prefix=".ruter-v2-", dir=path.parent)
@@ -214,7 +238,7 @@ def service_active(name: str) -> bool:
     return run("systemctl", "is-active", "--quiet", name, check=False).returncode == 0
 
 
-def install(interface: str, local_binary: str | None) -> None:
+def install(interface: str | None, local_binary: str | None) -> None:
     require_root()
     preflight()
     required = ("git", "curl", "ip", "ss", "python3")
@@ -223,10 +247,9 @@ def install(interface: str, local_binary: str | None) -> None:
         raise RuntimeError("Не готовы зависимости Debian. Сначала запустите bootstrap.sh")
     if (ETC / "config.json").exists():
         raise RuntimeError("Ruter v2 уже установлен. Для изменения подписки выберите пункт 2")
+    interface = select_lan_interface(interface)
     lan_ip, lan_cidr = network_info(interface)
-    print(f"Сеть: {interface}, адрес {lan_ip}, подсеть {lan_cidr}")
-    if input(f"Для подтверждения тестовой машины введите её IPv4 {lan_ip}: ").strip() != lan_ip:
-        raise RuntimeError("Установка отменена: адрес машины не подтверждён")
+    confirm_network(interface, lan_ip, lan_cidr)
     source = input("HTTPS-ссылка подписки или одна VLESS-ссылка: ").strip()
     if not source:
         raise RuntimeError("Источник подписки не указан")
@@ -397,7 +420,7 @@ MENU = [
 ]
 
 
-def dispatch(action: str, interface: str, binary: str | None) -> None:
+def dispatch(action: str, interface: str | None, binary: str | None) -> None:
     actions = {
         "install": lambda: install(interface, binary),
         "update": update_subscription,
@@ -415,7 +438,7 @@ def dispatch(action: str, interface: str, binary: str | None) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Ruter v2 Debian test gateway")
     parser.add_argument("action", nargs="?", choices=[x[2] for x in MENU])
-    parser.add_argument("--interface", default="ens18", help="LAN-интерфейс (для установки)")
+    parser.add_argument("--interface", help="LAN-интерфейс (по умолчанию определяется автоматически)")
     parser.add_argument("--core-binary", help="Путь к заранее проверенному sing-box-lx")
     args = parser.parse_args()
     try:
