@@ -37,7 +37,6 @@ getent passwd "$TARGET_USER" >/dev/null || { echo 'Пользователь не
 USER_HOME=$(getent passwd "$TARGET_USER" | cut -d: -f6)
 [[ -d $USER_HOME && $USER_HOME != / ]] || { echo 'Некорректная домашняя папка.' >&2; exit 1; }
 CHECKOUT="$USER_HOME/ruter-v2"
-[[ ! -e $CHECKOUT ]] || { echo "Папка уже существует: $CHECKOUT. Ничего не перезаписано." >&2; exit 1; }
 command -v apt-get >/dev/null || { echo 'Нужен Debian/apt-get.' >&2; exit 1; }
 if command -v systemctl >/dev/null && systemctl is-active --quiet sing-box.service; then
   echo 'На этой машине уже работает sing-box.service. Production/старый шлюз не тронут.' >&2
@@ -77,7 +76,18 @@ if ! id -nG "$TARGET_USER" | tr ' ' '\n' | grep -qx sudo; then
 fi
 
 echo '=== ЭТАП 2/2: исходники и установка Ruter v2 ==='
-git clone --depth 1 "$REPO" "$CHECKOUT"
+if [[ -e $CHECKOUT || -L $CHECKOUT ]]; then
+  [[ -d $CHECKOUT && ! -L $CHECKOUT ]] || { echo "Путь занят: $CHECKOUT" >&2; exit 1; }
+  [[ $(git -C "$CHECKOUT" remote get-url origin 2>/dev/null || true) == "$REPO" ]] || {
+    echo "Существующая папка не является репозиторием Ruter v2: $CHECKOUT" >&2; exit 1;
+  }
+  [[ -z $(git -C "$CHECKOUT" status --porcelain) ]] || {
+    echo "В $CHECKOUT есть локальные изменения. Обновление остановлено без перезаписи." >&2; exit 1;
+  }
+  git -C "$CHECKOUT" pull --ff-only
+else
+  git clone --depth 1 "$REPO" "$CHECKOUT"
+fi
 chown -R "$TARGET_USER:$(id -gn "$TARGET_USER")" "$CHECKOUT"
 cd "$CHECKOUT"
 ./ruter-v2 --interface "$LAN_IF" install

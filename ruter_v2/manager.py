@@ -69,7 +69,10 @@ def preflight() -> None:
     if os.uname().machine != "x86_64":
         raise RuntimeError("Закреплённое ядро рассчитано на x86_64")
     rules = command_output("ip", "-4", "rule", "show")
-    if re.search(r"^(12200|12210):", rules, re.M) or command_output("ip", "-4", "route", "show", "table", "220").strip():
+    # `ip route show table 220` exits with code 2 when the table does not yet
+    # exist. Inspect all tables instead: a fresh installation must accept that.
+    routes = json.loads(command_output("ip", "-j", "-4", "route", "show", "table", "all"))
+    if re.search(r"^(12200|12210):", rules, re.M) or any(str(route.get("table")) == "220" for route in routes):
         raise RuntimeError("Правила/таблица 220 уже заняты; установка остановлена")
     listeners = command_output("ss", "-H", "-lnt")
     for port in (2180, 2181, 9190):
