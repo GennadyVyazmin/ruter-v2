@@ -12,6 +12,9 @@ import json
 import re
 from urllib.parse import parse_qs, unquote, urlsplit
 
+LOCAL_PROXY_PORT = 2080
+LAN_PROXY_PORT = 2081
+
 
 class SubscriptionError(ValueError):
     pass
@@ -146,8 +149,8 @@ def build_config(outbounds: list[dict], lan_ip: str, api_secret: str) -> dict:
             {"type": "tun", "tag": "ruter-v2-in", "interface_name": "ruter-v2-tun",
              "address": ["172.31.252.1/30"], "auto_route": False,
              "strict_route": False, "stack": "system"},
-            {"type": "mixed", "tag": "ruter-v2-local", "listen": "127.0.0.1", "listen_port": 2180},
-            {"type": "mixed", "tag": "ruter-v2-lan", "listen": lan_ip, "listen_port": 2181},
+            {"type": "mixed", "tag": "ruter-v2-local", "listen": "127.0.0.1", "listen_port": LOCAL_PROXY_PORT},
+            {"type": "mixed", "tag": "ruter-v2-lan", "listen": lan_ip, "listen_port": LAN_PROXY_PORT},
         ],
         "outbounds": outbounds + [
             {"type": "urltest", "tag": "auto", "outbounds": tags,

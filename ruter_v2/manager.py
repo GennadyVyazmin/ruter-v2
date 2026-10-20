@@ -21,7 +21,9 @@ import sys
 import tempfile
 import urllib.request
 
-from ruter_v2.subscription import SubscriptionError, config_json, parse_subscription
+from ruter_v2.subscription import (
+    LAN_PROXY_PORT, LOCAL_PROXY_PORT, SubscriptionError, config_json, parse_subscription,
+)
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -80,7 +82,7 @@ def preflight() -> None:
     if re.search(r"^(12200|12210):", rules, re.M) or any(str(route.get("table")) == "220" for route in routes):
         raise RuntimeError("Правила/таблица 220 уже заняты; установка остановлена")
     listeners = command_output("ss", "-H", "-lnt")
-    for port in (2180, 2181, 9190):
+    for port in (LOCAL_PROXY_PORT, LAN_PROXY_PORT, 9190):
         if re.search(rf":{port}\s", listeners):
             raise RuntimeError(f"Порт {port} уже занят; установка остановлена")
 

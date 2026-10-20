@@ -58,6 +58,17 @@ class SubscriptionTests(unittest.TestCase):
         self.assertEqual([item[0] for item in MENU], [str(number) for number in range(1, 10)])
         self.assertEqual(MENU[-1][2], "uninstall")
 
+    def test_legacy_proxy_ports_survive_subscription_regeneration(self):
+        for source in (TCP, XHTTP, TCP + "\n" + XHTTP):
+            with self.subTest(source=source):
+                servers, _ = parse_subscription(source)
+                config = build_config(servers, "192.168.1.48", "a-secret")
+                mixed = [item for item in config["inbounds"] if item["type"] == "mixed"]
+                self.assertEqual(
+                    [(item["listen"], item["listen_port"]) for item in mixed],
+                    [("127.0.0.1", 2080), ("192.168.1.48", 2081)],
+                )
+
 
 if __name__ == "__main__":
     unittest.main()
