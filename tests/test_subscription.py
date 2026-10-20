@@ -51,9 +51,10 @@ class SubscriptionTests(unittest.TestCase):
 
     def test_config_and_menu(self):
         servers, _ = parse_subscription(TCP + "\n" + XHTTP)
-        config = build_config(servers, "192.168.88.40", "a-secret")
+        config = build_config(servers, "192.168.88.40")
         self.assertEqual(config["route"]["final"], "select")
         self.assertEqual(config["experimental"]["clash_api"]["external_controller"], "192.168.88.40:9190")
+        self.assertNotIn("secret", config["experimental"]["clash_api"])
         self.assertEqual([item[2] for item in MENU[:3]], ["install", "update", "change-source"])
         self.assertEqual([item[0] for item in MENU], [str(number) for number in range(1, 10)])
         self.assertEqual(MENU[-1][2], "uninstall")
@@ -62,7 +63,10 @@ class SubscriptionTests(unittest.TestCase):
         for source in (TCP, XHTTP, TCP + "\n" + XHTTP):
             with self.subTest(source=source):
                 servers, _ = parse_subscription(source)
-                config = build_config(servers, "192.168.1.48", "a-secret")
+                config = build_config(servers, "192.168.1.48")
+                api = config["experimental"]["clash_api"]
+                self.assertNotIn("secret", api)
+                self.assertEqual(api["external_controller"], "192.168.1.48:9190")
                 mixed = [item for item in config["inbounds"] if item["type"] == "mixed"]
                 self.assertEqual(
                     [(item["listen"], item["listen_port"]) for item in mixed],

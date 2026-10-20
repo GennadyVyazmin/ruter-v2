@@ -140,7 +140,7 @@ def parse_subscription(body: str) -> tuple[list[dict], list[str]]:
     return outbounds, warnings
 
 
-def build_config(outbounds: list[dict], lan_ip: str, api_secret: str) -> dict:
+def build_config(outbounds: list[dict], lan_ip: str) -> dict:
     ipaddress.IPv4Address(lan_ip)
     tags = [outbound["tag"] for outbound in outbounds]
     return {
@@ -166,11 +166,11 @@ def build_config(outbounds: list[dict], lan_ip: str, api_secret: str) -> dict:
         ], "final": "select"},
         "experimental": {
             "clash_api": {"external_controller": f"{lan_ip}:9190",
-                          "external_ui": "/opt/ruter-v2/ui", "secret": api_secret},
+                          "external_ui": "/opt/ruter-v2/ui"},
             "cache_file": {"enabled": True, "path": "/var/lib/ruter-v2/cache.db"},
         },
     }
 
 
-def config_json(outbounds: list[dict], lan_ip: str, api_secret: str) -> str:
-    return json.dumps(build_config(outbounds, lan_ip, api_secret), ensure_ascii=False, indent=2) + "\n"
+def config_json(outbounds: list[dict], lan_ip: str) -> str:
+    return json.dumps(build_config(outbounds, lan_ip), ensure_ascii=False, indent=2) + "\n"

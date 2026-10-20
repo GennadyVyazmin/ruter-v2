@@ -14,7 +14,6 @@ import os
 from pathlib import Path
 import platform
 import re
-import secrets
 import shutil
 import subprocess
 import sys
@@ -156,9 +155,9 @@ def source_body(source: str) -> str:
     raise SubscriptionError("Ожидается HTTPS-подписка или VLESS-ссылка")
 
 
-def checked_config(source: str, lan_ip: str, secret: str, binary: Path) -> tuple[str, list[str], int]:
+def checked_config(source: str, lan_ip: str, binary: Path) -> tuple[str, list[str], int]:
     servers, warnings = parse_subscription(source_body(source))
-    candidate = config_json(servers, lan_ip, secret)
+    candidate = config_json(servers, lan_ip)
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", prefix="ruter-v2-",
                                      dir=VAR, delete=False, encoding="utf-8") as stream:
         stream.write(candidate)
@@ -266,8 +265,7 @@ def install(interface: str | None, local_binary: str | None) -> None:
     OPT.mkdir(mode=0o755, parents=True, exist_ok=True)
     binary = install_core(local_binary)
     install_ui()
-    secret = secrets.token_urlsafe(32)
-    config, warnings, count = checked_config(source, lan_ip, secret, binary)
+    config, warnings, count = checked_config(source, lan_ip, binary)
     shutil.copy2(ROOT / "ruter_v2/route.sh", OPT / "route.sh")
     (OPT / "route.sh").chmod(0o755)
     package = OPT / "ruter_v2"
@@ -280,7 +278,6 @@ def install(interface: str | None, local_binary: str | None) -> None:
     (OPT / "ruter").chmod(0o755)
     atomic_write(ETC / "network.env", f"LAN_IF={interface}\nLAN_IP={lan_ip}\nLAN_CIDR={lan_cidr}\n")
     atomic_write(ETC / "source.txt", source + "\n")
-    atomic_write(ETC / "api-secret.txt", secret + "\n")
     atomic_write(ETC / "config.json", config)
     for name in ("ruter-v2-core.service", "ruter-v2-route.service"):
         shutil.copy2(ROOT / "systemd" / name, Path("/etc/systemd/system") / name)
@@ -290,7 +287,8 @@ def install(interface: str | None, local_binary: str | None) -> None:
     print(f"Установлено {count} серверов; службы не запущены.")
     for warning in warnings:
         print("Предупреждение:", warning)
-    print(f"MetaCubeXD после запуска: http://{lan_ip}:9190/ui/ (ключ в {ETC / 'api-secret.txt'})")
+    print(f"MetaCubeXD после запуска: http://{lan_ip}:9190/ui/ — без секретного ключа")
+    print("Любой с доступом к порту 9190 может управлять шлюзом. Не открывайте порт в интернет.")
     print("Для главного меню введите ruter; для запуска выберите пункт «Запустить шлюз».")
 
 
@@ -301,8 +299,7 @@ def update_subscription() -> None:
         raise RuntimeError("Сначала установите Ruter v2")
     source = source_file.read_text(encoding="utf-8").strip()
     lan_ip = re.search(r"^LAN_IP=(.+)$", (ETC / "network.env").read_text(), re.M).group(1)
-    secret = (ETC / "api-secret.txt").read_text().strip()
-    config, warnings, count = checked_config(source, lan_ip, secret, OPT / "bin/sing-box")
+    config, warnings, count = checked_config(source, lan_ip, OPT / "bin/sing-box")
     old = (ETC / "config.json").read_text(encoding="utf-8")
     was_running = service_active("ruter-v2-core.service")
     atomic_write(ETC / "config.json", config)
@@ -329,8 +326,7 @@ def change_source() -> None:
     if not new_source:
         raise RuntimeError("Источник пуст")
     lan_ip = re.search(r"^LAN_IP=(.+)$", (ETC / "network.env").read_text(), re.M).group(1)
-    secret = (ETC / "api-secret.txt").read_text().strip()
-    checked_config(new_source, lan_ip, secret, OPT / "bin/sing-box")
+    checked_config(new_source, lan_ip, OPT / "bin/sing-box")
     old_source = (ETC / "source.txt").read_text()
     atomic_write(ETC / "source.txt", new_source + "\n")
     try:
