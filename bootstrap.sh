@@ -56,8 +56,15 @@ fi
 
 echo '=== ЭТАП 1/2: подготовка Debian/Ubuntu ==='
 export DEBIAN_FRONTEND=noninteractive
-apt-get update
-apt-get install -y sudo git curl wget ca-certificates python3 iproute2 procps passwd systemd
+if [[ -f /etc/ruter-v2/config.json ]]; then
+  # Code updates must not also upgrade systemd/network packages on a live gateway.
+  for cmd in sudo git curl wget python3 ip ss sysctl systemctl usermod; do
+    command -v "$cmd" >/dev/null || { echo "Не хватает $cmd; установите зависимости перед обновлением." >&2; exit 1; }
+  done
+else
+  apt-get update
+  apt-get install -y sudo git curl wget ca-certificates python3 iproute2 procps passwd systemd
+fi
 for cmd in sudo git curl wget python3 ip ss sysctl systemctl usermod; do
   command -v "$cmd" >/dev/null || { echo "Не установлена команда $cmd" >&2; exit 1; }
 done
