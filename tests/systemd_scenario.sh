@@ -37,6 +37,26 @@ prepare_network
 docker exec "$container" systemctl enable ruter-v2-route.service
 docker exec "$container" systemctl start ruter-v2-route.service
 wait_routes
+# Exercise actual file deployment/daemon-reload while core + route watcher run.
+before_pid=$(docker exec "$container" systemctl show ruter-v2-core.service -p MainPID --value)
+docker exec -i "$container" python3 - <<'PY'
+import sys
+from pathlib import Path
+import subprocess
+sys.path.insert(0, '/opt/ruter-v2')
+from ruter_v2.updater import deploy
+from ruter_v2.routing import routing_lock
+config = Path('/etc/ruter-v2/config.json')
+config.write_text('{"existing-user-configuration":true}')
+before = config.read_bytes()
+with routing_lock():
+    deploy(Path('/tmp/ruter-ci-source'), Path('/opt/ruter-v2'), Path('/var/lib/ruter-v2'),
+           Path('/etc/systemd/system'), lambda *args: subprocess.run(args, check=True))
+assert config.read_bytes() == before
+PY
+after_pid=$(docker exec "$container" systemctl show ruter-v2-core.service -p MainPID --value)
+[[ $before_pid == "$after_pid" && $after_pid != 0 ]]
+wait_routes
 docker exec "$container" systemctl kill --kill-whom=main -s SIGKILL ruter-v2-core.service
 sleep 5
 docker exec "$container" systemctl is-active --quiet ruter-v2-core.service

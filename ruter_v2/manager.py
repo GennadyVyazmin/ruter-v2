@@ -306,11 +306,16 @@ def update_subscription() -> None:
         if was_running:
             run("systemctl", "restart", "ruter-v2-core.service")
             run("systemctl", "start", "ruter-v2-route.service")
+            run(str(OPT / 'route.sh'), 'start')
     except subprocess.CalledProcessError:
         atomic_write(ETC / "config.json", old)
         if was_running:
-            run("systemctl", "restart", "ruter-v2-core.service", check=False)
-            run("systemctl", "start", "ruter-v2-route.service", check=False)
+            try:
+                run("systemctl", "restart", "ruter-v2-core.service")
+                run("systemctl", "start", "ruter-v2-route.service")
+                run(str(OPT / 'route.sh'), 'start')
+            except subprocess.CalledProcessError as exc:
+                raise RuntimeError('Прежний конфиг возвращён, но восстановление шлюза не подтверждено; проверьте диагностику') from exc
         raise RuntimeError("Новый конфиг не запустился; прежний восстановлен")
     print(f"Подписка обновлена из сохранённого источника: {count} серверов")
     for warning in warnings:
