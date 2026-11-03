@@ -155,8 +155,9 @@ class Routing:
         for kind, entries in resources.items():
             for item in entries:
                 shape = next((spec for k, spec in self.specs() if k == kind and self.equal(kind, item, spec)), None)
-                protocol = str(item.get('protocol', 'boot'))
-                if shape and (protocol == PROTOCOL or legacy and protocol in ('boot', '3')):
+                protocol = str(item.get('protocol', '0' if kind == 'rule' else 'boot'))
+                old_protocols = ('0', 'boot', '3') if kind == 'rule' else ('boot', '3')
+                if shape and (protocol == PROTOCOL or legacy and protocol in old_protocols):
                     owned.append((kind, item, shape))
                 else:
                     conflicts.append((kind, item))
@@ -206,7 +207,7 @@ class Routing:
             for kind, item, spec in actual['owned']:
                 key = (kind, json.dumps(spec, sort_keys=True))
                 if key in seen:
-                    self.change('del', kind, spec, str(item.get('protocol', 'boot')))
+                    self.change('del', kind, spec, str(item.get('protocol', '0' if kind == 'rule' else 'boot')))
                 seen.add(key)
             if self.inspect()['status'] != 'active':
                 raise RuntimeError('Проверка маршрутов после применения не прошла: ' + json.dumps(self.inspect(), ensure_ascii=False))
@@ -234,7 +235,7 @@ class Routing:
         actual = self.inspect()
         # Remove LAN steering first; no flush, no delete-by-priority alone.
         for kind, item, spec in sorted(actual['owned'], key=lambda x: x[2].get('priority', 0), reverse=True):
-            self.change('del', kind, spec, str(item.get('protocol', 'boot')))
+            self.change('del', kind, spec, str(item.get('protocol', '0' if kind == 'rule' else 'boot')))
         state = self.state()
         if state.get('original_forward') == 0 and not actual['conflicts']:
             if self.linux.forwarding() == 1:

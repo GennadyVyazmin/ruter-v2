@@ -41,7 +41,7 @@ class FakeLinux:
             target.append(item)
         else:
             match = next(x for x in target if Routing.equal(kind, x, {k:v for k,v in item.items() if k != 'protocol'})
-                         and str(x.get('protocol', 'boot')) == item['protocol'])
+                         and str(x.get('protocol', '0' if kind == 'rule' else 'boot')) == item['protocol'])
             target.remove(match)
 
 
