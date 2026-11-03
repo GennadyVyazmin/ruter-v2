@@ -56,7 +56,8 @@ class SubscriptionTests(unittest.TestCase):
         self.assertEqual(config["experimental"]["clash_api"]["external_controller"], "192.168.88.40:9190")
         self.assertNotIn("secret", config["experimental"]["clash_api"])
         self.assertEqual([item[2] for item in MENU[:3]], ["install", "update", "change-source"])
-        self.assertEqual([item[0] for item in MENU], [str(number) for number in range(1, 10)])
+        self.assertEqual([item[0] for item in MENU], [str(number) for number in range(1, 11)])
+        self.assertEqual(MENU[-2][2], 'self-update')
         self.assertEqual(MENU[-1][2], "uninstall")
 
     def test_legacy_proxy_ports_survive_subscription_regeneration(self):

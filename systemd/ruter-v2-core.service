@@ -1,7 +1,7 @@
 [Unit]
 Description=Ruter v2 isolated sing-box-lx core
 After=network-online.target
-Wants=network-online.target
+Wants=network-online.target ruter-v2-route.service
 
 [Service]
 Type=simple

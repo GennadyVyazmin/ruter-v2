@@ -45,11 +45,11 @@ DISTRO_ID=$( . /etc/os-release; printf '%s' "$ID" )
   echo 'Поддерживаются только Debian и Ubuntu.' >&2; exit 1;
 }
 [[ -d /run/systemd/system ]] || { echo 'Нужна система с работающей systemd.' >&2; exit 1; }
-if command -v systemctl >/dev/null && systemctl is-active --quiet sing-box.service; then
+if [[ ! -f /etc/ruter-v2/config.json ]] && command -v systemctl >/dev/null && systemctl is-active --quiet sing-box.service; then
   echo 'На этой машине уже работает sing-box.service. Production/старый шлюз не тронут.' >&2
   exit 1
 fi
-if command -v systemctl >/dev/null && systemctl is-active --quiet ruter-xhttp-lab.service; then
+if [[ ! -f /etc/ruter-v2/config.json ]] && command -v systemctl >/dev/null && systemctl is-active --quiet ruter-xhttp-lab.service; then
   echo 'Временный XHTTP-шлюз ещё работает. Остановите его штатным скриптом перед установкой.' >&2
   exit 1
 fi
@@ -57,7 +57,7 @@ fi
 echo '=== ЭТАП 1/2: подготовка Debian/Ubuntu ==='
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y sudo git curl wget ca-certificates python3 iproute2 procps passwd
+apt-get install -y sudo git curl wget ca-certificates python3 iproute2 procps passwd systemd
 for cmd in sudo git curl wget python3 ip ss sysctl systemctl usermod; do
   command -v "$cmd" >/dev/null || { echo "Не установлена команда $cmd" >&2; exit 1; }
 done
@@ -97,7 +97,10 @@ else
 fi
 chown -R "$TARGET_USER:$(id -gn "$TARGET_USER")" "$CHECKOUT"
 cd "$CHECKOUT"
-./ruter-v2 --interface "$LAN_IF" install
-
-echo 'Ruter v2 установлен, но ещё не запущен.'
-echo 'Главное меню: ruter. После проверки выберите пункт 3 для запуска шлюза.'
+if [[ -f /etc/ruter-v2/config.json ]]; then
+  ./ruter-v2 self-update --source-dir "$CHECKOUT"
+else
+  ./ruter-v2 --interface "$LAN_IF" install
+  echo 'Ruter v2 установлен; автозапуск включён, но шлюз пока не запущен.'
+  echo 'Главное меню: ruter. После проверки выберите пункт 4 для запуска шлюза.'
+fi

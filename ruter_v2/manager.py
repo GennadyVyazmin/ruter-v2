@@ -61,8 +61,6 @@ def preflight() -> None:
         raise RuntimeError("Временный ruter-xhttp-lab работает. Остановите его штатным stop_xhttp_gateway.sh перед установкой v2")
     if service_active("sing-box.service"):
         raise RuntimeError("Существующий sing-box.service работает; установка второго шлюза на этой машине запрещена")
-    if Path("/var/lib/ruter-v2/route.state").exists():
-        raise RuntimeError("Правила Ruter v2 уже активны. Сначала остановите шлюз")
     for name in ("ruter", "ruter-v2"):
         launcher = Path("/usr/local/bin") / name
         if launcher.exists() or launcher.is_symlink():
@@ -270,7 +268,7 @@ def install(interface: str | None, local_binary: str | None) -> None:
     (OPT / "route.sh").chmod(0o755)
     package = OPT / "ruter_v2"
     package.mkdir(mode=0o755, exist_ok=True)
-    for filename in ("__init__.py", "manager.py", "subscription.py"):
+    for filename in ("__init__.py", "manager.py", "subscription.py", "routing.py", "updater.py"):
         shutil.copy2(ROOT / "ruter_v2" / filename, package / filename)
     shutil.copy2(ROOT / "ruter-v2", OPT / "ruter-v2")
     (OPT / "ruter-v2").chmod(0o755)
@@ -284,7 +282,8 @@ def install(interface: str | None, local_binary: str | None) -> None:
     Path("/usr/local/bin/ruter-v2").symlink_to(OPT / "ruter-v2")
     Path("/usr/local/bin/ruter").symlink_to(OPT / "ruter")
     run("systemctl", "daemon-reload")
-    print(f"Установлено {count} серверов; службы не запущены.")
+    run("systemctl", "enable", "ruter-v2-route.service")
+    print(f"Установлено {count} серверов; автозапуск включён, службы пока не запущены.")
     for warning in warnings:
         print("Предупреждение:", warning)
     print(f"MetaCubeXD после запуска: http://{lan_ip}:9190/ui/ — без секретного ключа")
@@ -344,25 +343,47 @@ def start() -> None:
         raise RuntimeError("Другой sing-box.service работает; второй шлюз не запущен")
     if not (ETC / "config.json").exists():
         raise RuntimeError("Сначала установите Ruter v2")
+    core_was_running = service_active("ruter-v2-core.service")
     run("systemctl", "start", "ruter-v2-core.service")
     try:
         run("systemctl", "start", "ruter-v2-route.service")
-    except subprocess.CalledProcessError:
-        run("systemctl", "stop", "ruter-v2-core.service", check=False)
+        # Also repairs active legacy oneshot services after a code-only upgrade.
+        run(str(OPT / 'route.sh'), 'start')
+        if routing_status()['status'] != 'active':
+            raise RuntimeError('Маршрутизация не подтверждена ядром Linux')
+    except (subprocess.CalledProcessError, RuntimeError):
+        if not core_was_running:
+            run("systemctl", "stop", "ruter-v2-core.service", check=False)
         raise
     print("Шлюз Ruter v2 работает")
 
 
 def stop() -> None:
     require_root()
-    run("systemctl", "stop", "ruter-v2-route.service", check=False)
-    run("systemctl", "stop", "ruter-v2-core.service", check=False)
+    run("systemctl", "stop", "ruter-v2-route.service")
+    run("systemctl", "stop", "ruter-v2-core.service")
+    run(str(OPT / 'route.sh'), 'stop')
     print("Шлюз Ruter v2 остановлен")
+
+
+def routing_status() -> dict:
+    from ruter_v2.routing import Routing, network, routing_lock
+    try:
+        with routing_lock():
+            return Routing(network(ETC / 'network.env')).inspect()
+    except (OSError, RuntimeError, ValueError) as exc:
+        return {'status': 'unknown', 'error': str(exc)}
 
 
 def status() -> None:
     print("Ядро:", "работает" if service_active("ruter-v2-core.service") else "остановлено")
-    print("Маршруты:", "работают" if service_active("ruter-v2-route.service") else "остановлены")
+    actual = routing_status()
+    labels = {'active': 'работают', 'partial': 'неполная конфигурация', 'stopped': 'остановлены',
+              'conflict': 'конфликт с чужими ресурсами', 'unknown': 'не удалось проверить'}
+    print('Маршруты Linux:', labels[actual['status']])
+    print('Служба маршрутизации:', 'работает' if service_active('ruter-v2-route.service') else 'остановлена')
+    if actual.get('error'):
+        print('Ошибка проверки:', actual['error'])
     enabled = run("systemctl", "is-enabled", "--quiet", "ruter-v2-route.service", check=False).returncode == 0
     print("Автозапуск:", "включён" if enabled else "выключен")
     if (ETC / "config.json").exists():
@@ -423,11 +444,13 @@ MENU = [
     ("6", "Состояние", "status"),
     ("7", "Диагностика", "diagnostics"),
     ("8", "Включить / выключить автозапуск", "autostart"),
-    ("9", "Удалить Ruter v2", "uninstall"),
+    ("9", "Обновить Ruter v2 из GitHub", "self-update"),
+    ("10", "Удалить Ruter v2", "uninstall"),
 ]
 
 
-def dispatch(action: str, interface: str | None, binary: str | None) -> None:
+def dispatch(action: str, interface: str | None, binary: str | None, source_dir=None) -> None:
+    from ruter_v2.updater import update_project
     actions = {
         "install": lambda: install(interface, binary),
         "update": update_subscription,
@@ -438,6 +461,7 @@ def dispatch(action: str, interface: str | None, binary: str | None) -> None:
         "autostart": autostart,
         "change-source": change_source,
         "uninstall": uninstall,
+        "self-update": lambda: update_project(source_dir),
     }
     actions[action]()
 
@@ -447,10 +471,11 @@ def main() -> int:
     parser.add_argument("action", nargs="?", choices=[x[2] for x in MENU])
     parser.add_argument("--interface", help="LAN-интерфейс (по умолчанию определяется автоматически)")
     parser.add_argument("--core-binary", help="Путь к заранее проверенному sing-box-lx")
+    parser.add_argument('--source-dir', type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args()
     try:
         if args.action:
-            dispatch(args.action, args.interface, args.core_binary)
+            dispatch(args.action, args.interface, args.core_binary, args.source_dir)
         else:
             while True:
                 print("\n=== Ruter v2 ===")
