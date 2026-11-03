@@ -202,7 +202,7 @@ class Routing:
                     self.change('del', kind, spec, str(item.get('protocol', 'boot')))
                 seen.add(key)
             if self.inspect()['status'] != 'active':
-                raise RuntimeError('Проверка маршрутов после применения не прошла')
+                raise RuntimeError('Проверка маршрутов после применения не прошла: ' + json.dumps(self.inspect(), ensure_ascii=False))
         except Exception:
             errors = []
             for kind, spec in reversed(added):
