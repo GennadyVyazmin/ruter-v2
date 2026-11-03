@@ -50,7 +50,7 @@ config = Path('/etc/ruter-v2/config.json')
 config.write_text('{"existing-user-configuration":true}')
 before = config.read_bytes()
 with routing_lock():
-    deploy(Path('/tmp/ruter-ci-source'), Path('/opt/ruter-v2'), Path('/var/lib/ruter-v2'),
+    deploy(Path('/usr/local/share/ruter-ci-source'), Path('/opt/ruter-v2'), Path('/var/lib/ruter-v2'),
            Path('/etc/systemd/system'), lambda *args: subprocess.run(args, check=True))
 assert config.read_bytes() == before
 PY
