@@ -126,6 +126,8 @@ class Routing:
     def equal(kind, actual, spec):
         # Reject all selectors not emitted by us (fwmark, gateway, metric, iif...).
         allowed = set(spec) | {'protocol', 'table', 'flags', 'type'}
+        if kind == 'rule':
+            allowed.add('srclen')
         if (set(actual) - allowed or set(actual.get('flags', [])) - {'linkdown'} or
                 actual.get('type', 'unicast') != 'unicast'):
             return False
@@ -134,8 +136,13 @@ class Routing:
                 return str(ipaddress.ip_network(value, strict=False))
             if key == 'table':
                 return '254' if str(value) == 'main' else str(value)
+            if key == 'scope':
+                return '253' if str(value) == 'link' else str(value)
             return str(value)
-        return all(normalized(k, actual.get(k)) == normalized(k, v) for k, v in spec.items())
+        values = dict(actual)
+        if kind == 'rule' and 'srclen' in values:
+            values['src'] = str(values['src']).split('/')[0] + '/' + str(values['srclen'])
+        return all(normalized(k, values.get(k)) == normalized(k, v) for k, v in spec.items())
 
     def inspect(self):
         rules, routes = self.linux.snapshot()

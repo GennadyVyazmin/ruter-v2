@@ -51,7 +51,7 @@ def main():
         assert rebooted.inspect()['status'] == 'conflict'
         rebooted.stop()
         rules, routes = linux.snapshot()
-        assert any(r.get('dst') == '10.9.0.0/16' and r.get('table') == 220 for r in routes)
+        assert any(r.get('dst') == '10.9.0.0/16' and str(r.get('table')) == '220' for r in routes)
         assert not any(r.get('priority') in (12200, 12210) for r in rules)
     print('Real Linux namespace: stale state / repeat / TUN loss / recovery / foreign resource preservation PASS')
 

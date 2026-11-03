@@ -175,3 +175,12 @@ class RoutingTests(unittest.TestCase):
         env.write_text('LAN_IF=$(touch /tmp/not-run)\nLAN_IP=192.168.1.48\nLAN_CIDR=192.168.1.0/24\n')
         with self.assertRaises(RuntimeError):
             network(env)
+
+    def test_numeric_iproute2_json_and_separate_source_prefix(self):
+        self.route.start()
+        for item in self.kernel.routes:
+            item['scope'] = '253'
+            item['table'] = '220'
+        rule = self.kernel.rules[-1]
+        rule['src'], rule['srclen'], rule['table'] = '192.168.1.0', 24, '220'
+        self.assertEqual(self.route.inspect()['status'], 'active')
