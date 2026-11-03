@@ -30,6 +30,17 @@ def main():
         root = Path(temporary)
         route = Routing(net, linux, root / 'run', root / 'legacy', 'boot-1')
         route.legacy.write_text('0\n')
+        # Actual old iproute2 commands: no explicit protocol metadata.
+        linux.run('ip', '-4', 'route', 'add', net['LAN_CIDR'], 'dev', 'ens18', 'scope', 'link', 'table', '220')
+        linux.run('ip', '-4', 'route', 'add', 'default', 'dev', 'ruter-v2-tun', 'table', '220')
+        linux.run('ip', '-4', 'rule', 'add', 'pref', '12200', 'from', net['LAN_IP'] + '/32', 'lookup', 'main')
+        linux.run('ip', '-4', 'rule', 'add', 'pref', '12210', 'from', net['LAN_CIDR'], 'lookup', '220')
+        linux.set_forwarding(1)
+        legacy_before = linux.snapshot()
+        route.start()
+        assert linux.snapshot() == legacy_before, 'Live legacy migration rewrote resources'
+        route.stop()
+        route.legacy.write_text('0\n')
         route.start()
         assert route.inspect()['status'] == 'active', route.inspect()
         before = linux.snapshot()
